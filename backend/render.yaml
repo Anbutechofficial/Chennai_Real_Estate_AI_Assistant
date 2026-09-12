@@ -16,3 +16,12 @@ services:
         sync: false
       - key: DEEPSEEK_API_KEY
         sync: false
+      - key: CLERK_PUBLISHABLE_KEY
+        value: pk_test_Y29oZXJlbnQtZWVsLTk2MzguY2xlcmsuYWNjb3VudHMuZGV2JA
+      - key: CLERK_SECRET_KEY
+        sync: false
+      - key: CLERK_ISSUER
+        value: https://coherent-eel-9638.clerk.accounts.dev
+      - key: JWT_SECRET_KEY
+        generateValue: true
+

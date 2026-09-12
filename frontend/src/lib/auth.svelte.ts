@@ -14,7 +14,13 @@
 import { getClerkToken, signOut as clerkSignOut } from "./clerk";
 
 // ── API Base URL ──
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+const API_BASE =
+  import.meta.env.VITE_API_BASE_URL ||
+  (typeof window !== "undefined" &&
+  !window.location.hostname.includes("localhost") &&
+  !window.location.hostname.includes("127.0.0.1")
+    ? "https://real-estate-rag-backend.onrender.com"
+    : "http://localhost:8000");
 
 
 // ╭──────────────────────────────────────────────╮
