@@ -10,6 +10,10 @@ motor
 certifi
 
 # AI / ML & Data Processing
+langchain
+langchain-core
+langchain-community
+langchain-google-genai
 google-genai
 litellm
 numpy
@@ -18,3 +22,14 @@ pandas
 # HTTP & Utilities
 requests
 python-dotenv
+httpx
+python-dateutil
+
+# Model Context Protocol (MCP)
+mcp
+
+# Authentication & Security
+PyJWT[crypto]
+
+# Audio Generation
+elevenlabs

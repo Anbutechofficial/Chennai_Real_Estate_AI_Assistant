@@ -1,7 +1,10 @@
 <script lang="ts">
   import { Canvas } from '@threlte/core';
   import ThreeHouse from '$lib/components/ThreeHouse.svelte';
-  import { ArrowRight, Building2, Sparkles, Home, Info } from '@lucide/svelte';
+  import AuthHeader from '$lib/components/AuthHeader.svelte';
+  import { ArrowRight, Building2, Sparkles, Home, Info, LogIn } from '@lucide/svelte';
+  import { authState } from '$lib/auth.svelte';
+  import { signIn, signUp } from '$lib/clerk';
 
   // Svelte 5 state for room details on hover
   let activeRoom = $state<any>(null);
@@ -32,7 +35,10 @@
 
       <nav class="nav-links">
         <a href="/" class="active">Overview</a>
-        <a href="/dashboard">Launch App</a>
+        {#if authState.isAuthenticated}
+          <a href="/dashboard">Launch App</a>
+          <AuthHeader />
+        {/if}
       </nav>
     </header>
 
@@ -61,10 +67,22 @@
         </p>
 
         <div class="cta-group">
-          <a href="/dashboard" class="btn-primary">
-            Enter Dashboard
-            <ArrowRight size={18} />
-          </a>
+          {#if authState.isAuthenticated}
+            <a href="/dashboard" class="btn-primary" id="hero-enter-dashboard">
+              <span>Enter Dashboard</span>
+              <ArrowRight size={18} />
+            </a>
+          {:else}
+            <div class="auth-buttons-wrapper">
+              <button class="btn-signin-custom" onclick={() => signIn()} id="hero-sign-in-btn">
+                <LogIn size={18} strokeWidth={2.2} />
+                <span>Sign In</span>
+              </button>
+              <button class="btn-signup-custom" onclick={() => signUp()} id="hero-sign-up-btn">
+                <span>Sign Up</span>
+              </button>
+            </div>
+          {/if}
         </div>
       </div>
     </main>
@@ -262,7 +280,74 @@
   .cta-group {
     margin-top: 0.5rem;
     display: flex;
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  /* Auth Action Buttons (Hero CTA matching design) */
+  .auth-buttons-wrapper {
+    display: inline-flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .btn-signin-custom {
+    display: inline-flex;
+    align-items: center;
     justify-content: center;
+    gap: 8px;
+    padding: 10px 22px;
+    min-height: 44px;
+    border-radius: 12px;
+    background: #080d1a;
+    border: 1.5px solid #59FF00;
+    color: #ffffff;
+    font-family: var(--font-display);
+    font-size: 1.05rem;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 0 14px rgba(89, 255, 0, 0.15);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .btn-signin-custom:hover {
+    background: rgba(89, 255, 0, 0.15);
+    color: #ffffff;
+    box-shadow: 0 0 22px rgba(89, 255, 0, 0.35);
+    transform: translateY(-2px);
+  }
+
+  .btn-signin-custom:active {
+    transform: translateY(0);
+  }
+
+  .btn-signup-custom {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 26px;
+    min-height: 44px;
+    border-radius: 12px;
+    background: #59FF00;
+    border: 1.5px solid #59FF00;
+    color: #060913;
+    font-family: var(--font-display);
+    font-size: 1.05rem;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 4px 16px rgba(89, 255, 0, 0.35);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .btn-signup-custom:hover {
+    background: #6aff1a;
+    border-color: #6aff1a;
+    box-shadow: 0 6px 24px rgba(89, 255, 0, 0.55);
+    transform: translateY(-2px);
+  }
+
+  .btn-signup-custom:active {
+    transform: translateY(0);
   }
 
   /* Footer */
@@ -356,6 +441,20 @@
 
     .cta-group {
       width: 100%;
+    }
+
+    .auth-buttons-wrapper {
+      width: 100%;
+      display: flex;
+      flex-direction: row;
+      gap: 10px;
+    }
+
+    .btn-signin-custom, .btn-signup-custom {
+      flex: 1;
+      justify-content: center;
+      padding: 10px 14px;
+      font-size: 0.95rem;
     }
 
     .btn-primary {

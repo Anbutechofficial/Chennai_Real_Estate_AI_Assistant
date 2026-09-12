@@ -11,6 +11,7 @@ from pymongo import MongoClient
 
 from app.core.config import Setting
 from app.rag.vector_store import VectorStore
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
 # Load environment variables
 base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -92,7 +93,10 @@ def get_sentence_model():
     if _st_model is None:
         try:
             from sentence_transformers import SentenceTransformer
-            _st_model = SentenceTransformer("all-MiniLM-L6-v2")
+            try:
+                _st_model = SentenceTransformer("all-MiniLM-L6-v2", local_files_only=True)
+            except Exception:
+                _st_model = SentenceTransformer("all-MiniLM-L6-v2")
         except Exception as e:
             print(f"SentenceTransformer initialization note: {e}")
             _st_model = False
@@ -104,7 +108,7 @@ def warmup_models():
     try:
         get_sentence_model()
         load_csv_properties()
-        print("⚡ Warmup completed: SentenceTransformer and property datasets loaded into RAM!")
+        print("[Warmup] Completed: SentenceTransformer and property datasets loaded into RAM!")
     except Exception as e:
         print(f"Warmup warning: {e}")
 
@@ -132,28 +136,36 @@ def _sync_get_query_embedding(query: str) -> list[float]:
 
     # Path 2: Gemini API embedding fallback
     gemini_key = Setting.GEMINI_API_KEY or os.getenv("GEMINI_API_KEY")
-    if gemini_key:
+    if gemini_key and gemini_key.strip():
         try:
             if _gemini_client is None:
                 from google import genai
-                _gemini_client = genai.Client(api_key=gemini_key)
+                _gemini_client = genai.Client(api_key=gemini_key.strip())
             from google.genai import types
-            res = _gemini_client.models.embed_content(
-                model="gemini-embedding-001",
-                contents=query,
-                config=types.EmbedContentConfig(output_dimensionality=768),
-            )
-            emb = []
-            if hasattr(res, "embeddings") and res.embeddings:
-                emb = list(res.embeddings[0].values)
-            elif hasattr(res, "embedding") and hasattr(res.embedding, "values"):
-                emb = list(res.embedding.values)
 
-            if emb:
-                if len(_query_embedding_cache) > MAX_EMBEDDING_CACHE_SIZE:
-                    _query_embedding_cache.clear()
-                _query_embedding_cache[normalized_q] = emb
-                return emb
+            for model_id in ["gemini-embedding-001", "text-embedding-004"]:
+                try:
+                    res = _gemini_client.models.embed_content(
+                        model=model_id,
+                        contents=query,
+                        config=types.EmbedContentConfig(output_dimensionality=768),
+                    )
+                    emb = []
+                    if hasattr(res, "embeddings") and res.embeddings:
+                        emb = list(res.embeddings[0].values)
+                    elif hasattr(res, "embedding") and hasattr(res.embedding, "values"):
+                        emb = list(res.embedding.values)
+
+                    if emb:
+                        if len(emb) < 768:
+                            emb = emb + [0.0] * (768 - len(emb))
+                        emb = emb[:768]
+                        if len(_query_embedding_cache) > MAX_EMBEDDING_CACHE_SIZE:
+                            _query_embedding_cache.clear()
+                        _query_embedding_cache[normalized_q] = emb
+                        return emb
+                except Exception:
+                    continue
         except Exception as e:
             print(f"Gemini query embedding note ({e}).")
 
@@ -298,6 +310,16 @@ async def retrieve(query: str, history: list = None, top_k: int = 5) -> list[dic
         if loc_clean in q_loc_check or loc in q_lower:
             found_locs.append(loc_clean)
     found_locs = list(dict.fromkeys(found_locs))
+
+    # If multiple locations exist, separate origin location (e.g. "at Porur", "from Guindy")
+    # from the target property search location (e.g. "properties in Velachery")
+    if len(found_locs) > 1:
+        origin_match = re.search(r'(?:i am|currently|from)\s+(?:currently\s+)?(?:at|in|from)?\s*([a-zA-Z\s]+?)(?:[.,;]|\band\b|\bfind\b|\bsearch\b|\bshow\b|\bproperties\b|\bflats\b)', q_lower)
+        if origin_match:
+            cand_orig = origin_match.group(1).strip()
+            filtered_locs = [l for l in found_locs if l not in cand_orig]
+            if filtered_locs:
+                found_locs = filtered_locs
 
     # Price constraint extraction
     min_price, max_price = None, None

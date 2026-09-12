@@ -216,3 +216,112 @@ button, a, input, select, textarea {
   }
 }
 
+/* 📍 Interactive Google Maps Pill Link in Chat */
+.map-link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  margin-bottom: 6px;
+  padding: 6px 14px;
+  background: rgba(89, 255, 0, 0.12);
+  color: var(--color-primary);
+  border: 1px solid rgba(89, 255, 0, 0.35);
+  border-radius: 99px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all var(--transition-fast);
+  box-shadow: 0 2px 8px rgba(89, 255, 0, 0.15);
+}
+
+.map-link-btn:hover {
+  background: var(--color-primary);
+  color: #060913;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(89, 255, 0, 0.4);
+}
+
+.light-theme .map-link-btn {
+  background: rgba(5, 150, 105, 0.1);
+  color: #059669;
+  border-color: rgba(5, 150, 105, 0.3);
+}
+
+.light-theme .map-link-btn:hover {
+  background: #059669;
+  color: #ffffff;
+}
+
+/* 🗺️ Embedded Route Map Card */
+.chat-map-card {
+  margin: 12px 0 8px 0;
+  display: flex;
+  flex-direction: column;
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid rgba(89, 255, 0, 0.3);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35), 0 0 12px rgba(89, 255, 0, 0.15);
+  max-width: 580px;
+  transition: all var(--transition-normal);
+}
+
+.chat-map-card:hover {
+  border-color: rgba(89, 255, 0, 0.6);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45), 0 0 18px rgba(89, 255, 0, 0.25);
+  transform: translateY(-2px);
+}
+
+.chat-map-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: rgba(6, 9, 19, 0.85);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--color-primary);
+  letter-spacing: 0.02em;
+}
+
+.chat-map-img-wrapper {
+  position: relative;
+  width: 100%;
+  max-height: 260px;
+  overflow: hidden;
+  background: #090d16;
+  display: block;
+}
+
+.chat-map-img {
+  width: 100%;
+  height: 100%;
+  max-height: 260px;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.4s ease;
+}
+
+.chat-map-card:hover .chat-map-img {
+  transform: scale(1.02);
+}
+
+.light-theme .chat-map-card {
+  background: #ffffff;
+  border-color: rgba(5, 150, 105, 0.35);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+.light-theme .chat-map-card:hover {
+  border-color: #059669;
+  box-shadow: 0 6px 20px rgba(5, 150, 105, 0.2);
+}
+
+.light-theme .chat-map-badge {
+  background: #f8fafc;
+  color: #059669;
+  border-bottom-color: #e2e8f0;
+}
+

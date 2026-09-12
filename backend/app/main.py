@@ -3,9 +3,12 @@ import asyncio
 from fastapi import FastAPI, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from app.routes.assistant import router as assistant_router
+from app.routes.auth import router as auth_router
+from app.routes.map import router as map_router
+from app.routes.mcp_route import router as mcp_router
 from app.rag.injection import ingest_csv
 from app.rag.retrieval import warmup_models
-from app.db.mongodb import get_vector_collection
+from app.db.mongodb import get_vector_collection, init_db_indexes
 
 app = FastAPI(title="Real Estate AI Assistant")
 
@@ -18,11 +21,15 @@ app.add_middleware(
 )
 
 app.include_router(assistant_router)
+app.include_router(auth_router)
+app.include_router(map_router)
+app.include_router(mcp_router)
 
 
 @app.on_event("startup")
 async def startup_db_check():
-    """Auto-ingest property CSV into MongoDB Atlas if collection is empty, and warm up models."""
+    """Auto-ingest property CSV into MongoDB Atlas if collection is empty, initialize indexes, and warm up models."""
+    asyncio.create_task(init_db_indexes())
     asyncio.create_task(asyncio.to_thread(warmup_models))
     try:
         collection = get_vector_collection()

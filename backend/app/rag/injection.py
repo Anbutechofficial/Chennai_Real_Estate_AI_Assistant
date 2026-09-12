@@ -3,6 +3,9 @@ import asyncio
 import pandas as pd
 from dotenv import load_dotenv
 
+from langchain_core.documents import Document
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
+
 from app.core.config import Setting
 from app.rag.vector_store import VectorStore
 
@@ -24,6 +27,17 @@ async def ingest_csv(file_path: str, batch_size: int = 50):
 
     vector_store = VectorStore()
 
+    # Initialize LangChain Google embeddings if key present
+    lc_embeddings = None
+    if GEMINI_API_KEY:
+        try:
+            lc_embeddings = GoogleGenerativeAIEmbeddings(
+                model="models/gemini-embedding-001",
+                google_api_key=GEMINI_API_KEY.strip()
+            )
+        except Exception as e:
+            print(f"LangChain GoogleGenerativeAIEmbeddings init note: {e}")
+
     # 2. Process in batches
     for i in range(0, len(df), batch_size):
         batch = df.iloc[i : i + batch_size]
@@ -35,25 +49,23 @@ async def ingest_csv(file_path: str, batch_size: int = 50):
         ]
         metadatas = [row.to_dict() for _, row in batch.iterrows()]
 
+        # Convert to LangChain Document objects
+        langchain_docs = [
+            Document(page_content=text, metadata=meta)
+            for text, meta in zip(documents, metadatas)
+        ]
+
         embeddings = []
-        if GEMINI_API_KEY:
+        if lc_embeddings:
             for attempt in range(3):
                 try:
-                    from google import genai
-                    from google.genai import types
-                    gemini_client = genai.Client(api_key=GEMINI_API_KEY)
-                    response = gemini_client.models.embed_content(
-                        model="gemini-embedding-001",
-                        contents=documents,
-                        config=types.EmbedContentConfig(output_dimensionality=768),
-                    )
-                    embeddings = [e.values for e in response.embeddings]
+                    embeddings = await lc_embeddings.aembed_documents(documents)
                     break
                 except Exception as e:
                     if ("429" in str(e) or "RESOURCE_EXHAUSTED" in str(e)) and attempt < 2:
                         await asyncio.sleep(5 * (attempt + 1))
                     else:
-                        print(f"Gemini API embedding failed: {e}. Falling back to SentenceTransformer.")
+                        print(f"LangChain embedding attempt failed: {e}. Falling back to SentenceTransformer.")
                         break
 
         if not embeddings:
@@ -83,4 +95,3 @@ async def ingest_csv(file_path: str, batch_size: int = 50):
 if __name__ == "__main__":
     csv_file = os.path.abspath(os.path.join(base_dir, "..", "uploads", "Real_Estate_Assistant.csv"))
     asyncio.run(ingest_csv(csv_file))
-

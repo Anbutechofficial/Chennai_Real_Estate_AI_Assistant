@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from pymongo import UpdateOne
+from langchain_core.documents import Document
 from app.db.mongodb import get_vector_collection
 
 logger = logging.getLogger("uvicorn")
@@ -283,4 +284,20 @@ class VectorStore:
 
         fused_results = self._reciprocal_rank_fusion([vector_results, keyword_results])
         return fused_results[:top_k]
+
+    async def get_langchain_documents(self, query_text: str, query_embedding: list[float], top_k: int = 4) -> list[Document]:
+        """LangChain compatible search returning standard Document objects."""
+        results = await self.hybrid_search(query_text=query_text, query_embedding=query_embedding, top_k=top_k)
+        return [
+            Document(
+                page_content=r.get("text", ""),
+                metadata={
+                    "id": str(r.get("_id", "")),
+                    "source": r.get("source", "unknown"),
+                    "score": float(r.get("score", 0.0))
+                }
+            )
+            for r in results
+        ]
+
         

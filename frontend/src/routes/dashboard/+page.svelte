@@ -1,8 +1,16 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import AuthHeader from '$lib/components/AuthHeader.svelte';
+  import ChatRouteMap from '$lib/components/ChatRouteMap.svelte';
+  import ChatCalendarCard from '$lib/components/ChatCalendarCard.svelte';
+  import ConnectorsView from '$lib/components/ConnectorsView.svelte';
+  import { authState, verifyWithBackend } from '$lib/auth.svelte';
+  import { initClerk } from '$lib/clerk';
+  import { goto } from '$app/navigation';
   import { 
     LayoutDashboard, 
     History, 
+    Plug,
     Mic, 
     Database, 
     HelpCircle, 
@@ -26,10 +34,15 @@
     ArrowUpRight,
     Search,
     Building2,
-    Menu
+    Menu,
+    Lock
   } from '@lucide/svelte';
 
   // --- STATE VARIABLES ---
+  
+  // Auth Protection Guard
+  let authChecking = $state(true);
+  let isAccessAllowed = $state(false);
   
   // Navigation & Theme
   let sidebarCollapsed = $state(false);
@@ -128,10 +141,52 @@
       document.documentElement.classList.remove('light-theme');
     }
 
-    // Initial backend check and start interval
-    checkBackendHealth();
-    const interval = setInterval(checkBackendHealth, 8000);
+    // ── Authentication Protection Guard ──
+    (async () => {
+      try {
+        const clerk = await initClerk();
+        if (!clerk.user) {
+          // If unauthenticated, redirect to landing page where Sign In / Sign Up is available
+          isAccessAllowed = false;
+          authChecking = false;
+          goto('/');
+          return;
+        }
+
+        if (!authState.isAuthenticated) {
+          const verified = await verifyWithBackend();
+          if (!verified && !clerk.user) {
+            isAccessAllowed = false;
+            authChecking = false;
+            goto('/');
+            return;
+          }
+        }
+
+        isAccessAllowed = true;
+        authChecking = false;
+        checkBackendHealth();
+      } catch (err) {
+        console.error('Auth guard error:', err);
+        isAccessAllowed = false;
+        authChecking = false;
+        goto('/');
+      }
+    })();
+
+    const interval = setInterval(() => {
+      if (isAccessAllowed) {
+        checkBackendHealth();
+      }
+    }, 8000);
     return () => clearInterval(interval);
+  });
+
+  $effect(() => {
+    // If user signs out while on the dashboard, redirect back to landing page
+    if (!authChecking && !authState.isLoading && !authState.isAuthenticated) {
+      goto('/');
+    }
   });
 
   // --- ACTIONS ---
@@ -185,8 +240,8 @@
 
     for (const base of uniqueTargets) {
       const controller = new AbortController();
-      // Allow 15s for Render free-tier cold starts, 4s for local
-      const timeoutMs = base.includes('onrender.com') ? 15000 : 4000;
+      // Allow 90s for Render free-tier cold starts, 75s for local AI processing & tool calling
+      const timeoutMs = base.includes('onrender.com') ? 90000 : 75000;
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
       try {
@@ -217,6 +272,168 @@
   }
 
 
+  const CHENNAI_COORDS: Record<string, [number, number]> = {
+    'porur': [13.0382, 80.1565],
+    'guindy': [13.0067, 80.2025],
+    'velachery': [12.9815, 80.2180],
+    'sholinganallur': [12.8996, 80.2279],
+    'omr': [12.9416, 80.2362],
+    'thoraipakkam': [12.9416, 80.2362],
+    'chennai central': [13.0827, 80.2707],
+    'central': [13.0827, 80.2707],
+    'airport': [12.9941, 80.1709],
+    'anna nagar': [13.0850, 80.2101],
+    't nagar': [13.0418, 80.2341],
+    'adyar': [13.0012, 80.2565],
+    'tambaram': [12.9249, 80.1000],
+    'medavakkam': [12.9185, 80.1902],
+    'perumbakkam': [12.9038, 80.1983],
+    'navalur': [12.8465, 80.2268],
+    'siruseri': [12.8286, 80.2206],
+    'kelambakkam': [12.7874, 80.2198],
+    'egmore': [13.0822, 80.2607],
+    'nungambakkam': [13.0604, 80.2396],
+    'alandur': [12.9975, 80.2006],
+    'mugalivakkam': [13.0238, 80.1652]
+  };
+
+  function getCoordinatesForPlace(name: string, defaultLat: number, defaultLon: number): [number, number] {
+    const clean = name.toLowerCase().trim();
+    for (const [key, coords] of Object.entries(CHENNAI_COORDS)) {
+      if (clean.includes(key)) return coords;
+    }
+    return [defaultLat, defaultLon];
+  }
+
+  // Parse structured route details from assistant message for rendering real interactive Google Maps
+  function getRouteMapData(text: string) {
+    if (!text) return null;
+    
+    // 1. Match /api/v1/map/route parameters
+    const mapUrlMatch = text.match(/\/api\/v1\/map\/route\?([^)\s"'>]+)/);
+    // 2. Match Google Maps directions URL
+    const gmapsMatch = text.match(/https:\/\/www\.google\.com\/maps\/dir\/\?[^)\s"'>]+/);
+    // 3. Match Route markdown title: ![📍 Route Map: Porur to Velachery]
+    const routeTitleMatch = text.match(/!\[(?:📍\s*)?(?:Route Map|Route):\s*([^to\n]+?)\s+to\s+([^\]\n]+)\]/i);
+    // 4. Match general Route phrases in text
+    const textRouteMatch = text.match(/(?:route|distance|travel|navigat\w*)\s+(?:from|between)\s+([A-Za-z0-9\s]+?)\s+(?:to|and)\s+([A-Za-z0-9\s,]+?)(?:\.|\n|,|$)/i);
+
+    if (mapUrlMatch) {
+      try {
+        const params = new URLSearchParams(mapUrlMatch[1]);
+        const origin = params.get('origin') || params.get('orig') || 'Porur';
+        const destination = params.get('destination') || params.get('dest') || 'Velachery';
+        const distKm = params.get('dist') || '14.4';
+        const durationMins = params.get('time') || '30';
+        const [cLat1, cLon1] = getCoordinatesForPlace(origin, 13.0382, 80.1565);
+        const [cLat2, cLon2] = getCoordinatesForPlace(destination, 12.9815, 80.2180);
+        const lat1 = parseFloat(params.get('lat1') || String(cLat1));
+        const lon1 = parseFloat(params.get('lon1') || String(cLon1));
+        const lat2 = parseFloat(params.get('lat2') || String(cLat2));
+        const lon2 = parseFloat(params.get('lon2') || String(cLon2));
+        const googleMapsUrl = gmapsMatch ? gmapsMatch[0] : `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}`;
+
+        return { origin, destination, distKm, durationMins, lat1, lon1, lat2, lon2, googleMapsUrl };
+      } catch (e) {
+        console.error('Error parsing route map params:', e);
+      }
+    }
+
+    if (gmapsMatch) {
+      try {
+        const urlObj = new URL(gmapsMatch[0]);
+        const origin = decodeURIComponent(urlObj.searchParams.get('origin') || 'Porur');
+        const destination = decodeURIComponent(urlObj.searchParams.get('destination') || 'Velachery');
+        const distMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:km|kilometers)/i);
+        const timeMatch = text.match(/(\d+)\s*(?:mins?|minutes)/i);
+        const [lat1, lon1] = getCoordinatesForPlace(origin, 13.0382, 80.1565);
+        const [lat2, lon2] = getCoordinatesForPlace(destination, 12.9815, 80.2180);
+
+        return {
+          origin,
+          destination,
+          distKm: distMatch ? distMatch[1] : '14.4',
+          durationMins: timeMatch ? timeMatch[1] : '30',
+          lat1,
+          lon1,
+          lat2,
+          lon2,
+          googleMapsUrl: gmapsMatch[0]
+        };
+      } catch (e) {
+        console.error('Error parsing gmaps match:', e);
+      }
+    }
+
+    if (routeTitleMatch) {
+      const origin = routeTitleMatch[1].trim();
+      const destination = routeTitleMatch[2].trim();
+      const distMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:km|kilometers)/i);
+      const timeMatch = text.match(/(\d+)\s*(?:mins?|minutes)/i);
+      const [lat1, lon1] = getCoordinatesForPlace(origin, 13.0382, 80.1565);
+      const [lat2, lon2] = getCoordinatesForPlace(destination, 12.9815, 80.2180);
+
+      return {
+        origin,
+        destination,
+        distKm: distMatch ? distMatch[1] : '14.4',
+        durationMins: timeMatch ? timeMatch[1] : '30',
+        lat1,
+        lon1,
+        lat2,
+        lon2,
+        googleMapsUrl: `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}`
+      };
+    }
+
+    if (textRouteMatch && (text.includes('km') || text.includes('mins') || text.includes('Google Maps'))) {
+      const origin = textRouteMatch[1].trim();
+      const destination = textRouteMatch[2].trim();
+      const distMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:km|kilometers)/i);
+      const timeMatch = text.match(/(\d+)\s*(?:mins?|minutes)/i);
+      const [lat1, lon1] = getCoordinatesForPlace(origin, 13.0382, 80.1565);
+      const [lat2, lon2] = getCoordinatesForPlace(destination, 12.9815, 80.2180);
+
+      return {
+        origin,
+        destination,
+        distKm: distMatch ? distMatch[1] : '14.4',
+        durationMins: timeMatch ? timeMatch[1] : '30',
+        lat1,
+        lon1,
+        lat2,
+        lon2,
+        googleMapsUrl: `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}`
+      };
+    }
+
+    return null;
+  }
+
+  // Parse structured site visit booking details for rendering Google Calendar Event card
+  function getCalendarBookingData(text: string) {
+    if (!text) return null;
+    const isVisitMatch = text.match(/(?:Site Visit|Site visit|site visit|Appointment|Booking Ref|Booking Reference|visit is scheduled|scheduled for|confirmed for)/i);
+    const bookingIdMatch = text.match(/VISIT-[A-Z0-9]{4,8}/i);
+    
+    if (isVisitMatch && (bookingIdMatch || text.toLowerCase().includes('confirmed') || text.toLowerCase().includes('scheduled'))) {
+      const propMatch = text.match(/(?:for|at)\s+([A-Z][A-Za-z0-9\s,–-]+?)(?:\s+on|\.|\n|$)/);
+      const dateMatch = text.match(/(?:on|date:?)\s+([A-Za-z0-9\s,]+?)(?:\s+at|\.|\n|$)/i);
+      const timeMatch = text.match(/(?:at|time:?)\s+(\d{1,2}:\d{2}\s*(?:AM|PM))/i);
+      const nameMatch = text.match(/(?:customer|client|name:?)\s+([A-Za-z\s]+?)(?:\.|\n|$)/i);
+
+      return {
+        propertyName: propMatch ? propMatch[1].trim() : 'Prestige Courtyards, Sholinganallur',
+        visitDate: dateMatch ? dateMatch[1].trim() : 'Upcoming Saturday',
+        visitTime: timeMatch ? timeMatch[1].trim() : '11:00 AM',
+        customerName: nameMatch ? nameMatch[1].trim() : 'Prospective Buyer',
+        bookingId: bookingIdMatch ? bookingIdMatch[0] : 'VISIT-' + Math.random().toString(36).substring(2, 8).toUpperCase(),
+        notes: 'Site Visit & Property Tour'
+      };
+    }
+    return null;
+  }
+
   function formatMessageText(text: string): string {
     if (!text) return '';
     let formatted = text
@@ -232,9 +449,25 @@
       .replace(/Matching_Count:/gi, '')
       .replace(/Exact_Match_Found:/gi, '')
       .trim();
+
+    // Remove any raw markdown image tags to prevent broken img placeholders
+    formatted = formatted.replace(/!\[(.*?)\]\((.+?)\)/g, '');
+
+    // Convert Google Maps & external markdown links [text](url) to styled interactive buttons
+    formatted = formatted.replace(
+      /\[(.*?)\]\((https?:\/\/[^\s\)]+)\)/g,
+      '<a href="$2" target="_blank" rel="noopener noreferrer" class="map-link-btn">$1 <svg style="display:inline;vertical-align:middle;margin-left:4px;" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>'
+    );
+
+    // 3. Convert markdown bold **text** to <strong>text</strong>
+    formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+    // 4. Convert newlines to breaks
+    formatted = formatted.replace(/\n/g, '<br />');
     
     return formatted;
   }
+
 
   // Health check polling
   async function checkBackendHealth() {
@@ -337,42 +570,115 @@
     }
   }
 
-  // Voice Recording & Transcription via Web Audio API
+  // Voice Recording & Real-time Speech Recognition
+  let speechRecognition: any = null;
+
   async function toggleRecording() {
     if (isRecording) {
+      if (speechRecognition) {
+        try { speechRecognition.stop(); } catch (_) {}
+        speechRecognition = null;
+      }
       if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-        mediaRecorder.stop();
+        try { mediaRecorder.stop(); } catch (_) {}
       }
       isRecording = false;
-    } else {
+      return;
+    }
+
+    // 1. Try Browser Native Web Speech API first (Real-time live typing)
+    const SpeechRecognitionClass = typeof window !== 'undefined' && ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
+    if (SpeechRecognitionClass) {
       try {
-        mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        mediaRecorder = new MediaRecorder(mediaStream);
-        audioChunks = [];
+        speechRecognition = new SpeechRecognitionClass();
+        speechRecognition.continuous = false;
+        speechRecognition.interimResults = true;
+        speechRecognition.lang = 'en-US';
 
-        mediaRecorder.ondataavailable = (event) => {
-          if (event.data.size > 0) {
-            audioChunks.push(event.data);
+        let initialPromptText = quickAskQuestion;
+        let speechCapturedText = '';
+
+        speechRecognition.onstart = () => {
+          isRecording = true;
+        };
+
+        speechRecognition.onresult = (event: any) => {
+          let interim = '';
+          let final = '';
+          for (let i = event.resultIndex; i < event.results.length; ++i) {
+            if (event.results[i].isFinal) {
+              final += event.results[i][0].transcript;
+            } else {
+              interim += event.results[i][0].transcript;
+            }
+          }
+          speechCapturedText = (final + ' ' + interim).trim();
+          if (speechCapturedText) {
+            quickAskQuestion = initialPromptText ? (initialPromptText + ' ' + speechCapturedText) : speechCapturedText;
           }
         };
 
-        mediaRecorder.onstop = async () => {
-          const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-          const file = new File([audioBlob], 'voice-input.webm', { type: 'audio/webm' });
-          
-          if (mediaStream) {
-            mediaStream.getTracks().forEach(track => track.stop());
+        speechRecognition.onerror = (event: any) => {
+          console.warn('SpeechRecognition error event:', event.error);
+          isRecording = false;
+          speechRecognition = null;
+          if (event.error === 'network' || event.error === 'service-not-allowed' || event.error === 'no-speech') {
+            startMediaRecorderFallback();
           }
-
-          await transcribeAudioBlob(file);
         };
 
-        mediaRecorder.start();
-        isRecording = true;
+        speechRecognition.onend = () => {
+          isRecording = false;
+          speechRecognition = null;
+          if (speechCapturedText) {
+            audioTranscripts.push({
+              filename: 'Live Voice Search',
+              size: '0.01MB',
+              text: speechCapturedText,
+              time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            });
+          }
+        };
+
+        speechRecognition.start();
+        return;
       } catch (err) {
-        alert('Microphone access denied or unavailable. Please enable mic permissions.');
-        console.error(err);
+        console.warn('SpeechRecognition initialization error, falling back to MediaRecorder:', err);
       }
+    }
+
+    // 2. Fallback to MediaRecorder + Backend API
+    await startMediaRecorderFallback();
+  }
+
+  async function startMediaRecorderFallback() {
+    try {
+      mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorder = new MediaRecorder(mediaStream);
+      audioChunks = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunks.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+        const file = new File([audioBlob], 'voice-input.webm', { type: 'audio/webm' });
+        
+        if (mediaStream) {
+          mediaStream.getTracks().forEach(track => track.stop());
+        }
+
+        await transcribeAudioBlob(file);
+      };
+
+      mediaRecorder.start();
+      isRecording = true;
+    } catch (err) {
+      alert('Microphone access denied or unavailable. Please check your mic permissions in browser settings.');
+      console.error(err);
     }
   }
 
@@ -388,13 +694,13 @@
       });
 
       if (!res.ok) {
-        throw new Error('Transcription API returned error status ' + res.status);
+        throw new Error(`Server returned status ${res.status}`);
       }
 
       const data = await res.json();
-      const transcribedText = data.text || '';
+      const transcribedText = (data.text || '').trim();
 
-      if (transcribedText.trim()) {
+      if (transcribedText) {
         quickAskQuestion = (quickAskQuestion ? quickAskQuestion + ' ' : '') + transcribedText;
         
         audioTranscripts.push({
@@ -403,9 +709,11 @@
           text: transcribedText,
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         });
+      } else {
+        console.log('No clear speech detected in recording.');
       }
     } catch (err: any) {
-      alert(`Voice Search Transcription Failed: ${err.message}. Ensure GROQ_API_KEY is active.`);
+      console.error('Voice search transcription error:', err);
     } finally {
       isTranscribing = false;
       checkBackendHealth();
@@ -427,6 +735,17 @@
   }
 </script>
 
+{#if authChecking}
+  <div class="auth-loading-screen animate-fade-in">
+    <div class="auth-loading-card glass-panel">
+      <div class="auth-spinner-ring"></div>
+      <div class="auth-status-text">
+        <h3>Securing Session</h3>
+        <p>Verifying authentication credentials...</p>
+      </div>
+    </div>
+  </div>
+{:else if isAccessAllowed}
 <div class="dashboard-container">
   
   {#if mobileMenuOpen}
@@ -477,6 +796,18 @@
             <span class="count-badge">{queryHistory.length}</span>
           {/if}
         </button>
+
+        <button 
+          class="menu-item" 
+          class:active={activeSidebarTab === 'Connectors'} 
+          onclick={() => { activeSidebarTab = 'Connectors'; mobileMenuOpen = false; }}
+          title="MCP Connectors & OAuth"
+        >
+          <Plug size={20} />
+          {#if !sidebarCollapsed || mobileMenuOpen}
+            <span>Connectors</span>
+          {/if}
+        </button>
       </nav>
     </div>
 
@@ -520,13 +851,8 @@
 
         <div class="divider"></div>
 
-        <!-- User Profile Dropdown -->
-        <div class="user-profile">
-          <div class="avatar">
-            <User size={18} color="#ffffff" />
-          </div>
-          <span class="username">Admin User</span>
-        </div>
+        <!-- User Auth (Clerk) -->
+        <AuthHeader />
       </div>
     </header>
 
@@ -557,11 +883,17 @@
                     <h4>Your Conversation Starts Here</h4>
                     <p>Ask a question about property values, market trends, or listings to begin RAG retrieval analysis.</p>
                     <div class="empty-convo-suggestions">
-                      <button onclick={() => quickAskQuestion = "What is the current market trend for 3-bedroom homes in Austin, TX?"}>
-                        "What is the market trend in Austin, TX?"
+                      <button onclick={() => quickAskQuestion = "What are the nearby metro stations and hospitals around Sholinganallur OMR?"}>
+                        📍 "Nearby metro & hospitals for Sholinganallur"
                       </button>
-                      <button onclick={() => quickAskQuestion = "Are there any listings at 123 Main St?"}>
-                        "Are there any listings at 123 Main St?"
+                      <button onclick={() => quickAskQuestion = "Calculate EMI for 75 Lakhs home loan at 8.5% for 20 years with interest breakdown"}>
+                        🧮 "Calculate EMI for 75L loan (20 yrs)"
+                      </button>
+                      <button onclick={() => quickAskQuestion = "Show on-road cost & stamp duty breakdown for an 80 Lakhs property (1250 sqft)"}>
+                        💰 "Stamp duty & price/sqft for 80L"
+                      </button>
+                      <button onclick={() => quickAskQuestion = "Book a property site visit for Prestige Courtyards this Saturday at 11:00 AM for Anbarasu (9876543210)"}>
+                        📅 "Book site visit for Prestige Courtyards"
                       </button>
                     </div>
                   </div>
@@ -582,7 +914,40 @@
 
                       <div class="bubble-text">
                         {#if formatMessageText(msg.text)}
-                          <p>{formatMessageText(msg.text)}</p>
+                          <p>{@html formatMessageText(msg.text)}</p>
+                        {/if}
+
+                        <!-- Render Real Interactive Google-Maps-Style Route Map in Chat -->
+                        {#if msg.sender !== 'user' && getRouteMapData(msg.text)}
+                          {@const routeInfo = getRouteMapData(msg.text)}
+                          {#if routeInfo}
+                            <ChatRouteMap
+                              origin={routeInfo.origin}
+                              destination={routeInfo.destination}
+                              distKm={routeInfo.distKm}
+                              durationMins={routeInfo.durationMins}
+                              lat1={routeInfo.lat1}
+                              lon1={routeInfo.lon1}
+                              lat2={routeInfo.lat2}
+                              lon2={routeInfo.lon2}
+                              googleMapsUrl={routeInfo.googleMapsUrl}
+                            />
+                          {/if}
+                        {/if}
+
+                        <!-- Render Google Calendar Event Card in Chat -->
+                        {#if msg.sender !== 'user' && getCalendarBookingData(msg.text)}
+                          {@const calInfo = getCalendarBookingData(msg.text)}
+                          {#if calInfo}
+                            <ChatCalendarCard
+                              propertyName={calInfo.propertyName}
+                              visitDate={calInfo.visitDate}
+                              visitTime={calInfo.visitTime}
+                              customerName={calInfo.customerName}
+                              bookingId={calInfo.bookingId}
+                              notes={calInfo.notes}
+                            />
+                          {/if}
                         {/if}
                         
                         <!-- Render Bullet Stats for initial Austin Trend response -->
@@ -712,7 +1077,8 @@
                 </div>
               {/if}
             </div>
-
+          {:else if activeSidebarTab === 'Connectors'}
+            <ConnectorsView onBack={() => activeSidebarTab = 'Dashboard'} />
           {/if}
           
         </div>
@@ -722,8 +1088,60 @@
   </div>
 
 </div>
+{/if}
 
 <style>
+  /* --- AUTH LOADING SCREEN --- */
+  .auth-loading-screen {
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--bg-primary);
+    padding: 1.5rem;
+  }
+
+  .auth-loading-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1.25rem;
+    padding: 2.5rem 3rem;
+    text-align: center;
+    max-width: 400px;
+    border-radius: 16px;
+    border: 1px solid rgba(89, 255, 0, 0.25);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5), 0 0 25px rgba(89, 255, 0, 0.1);
+  }
+
+  .auth-spinner-ring {
+    width: 42px;
+    height: 42px;
+    border: 3px solid rgba(89, 255, 0, 0.2);
+    border-top-color: #59FF00;
+    border-radius: 50%;
+    animation: authSpin 0.9s cubic-bezier(0.5, 0.1, 0.5, 0.9) infinite;
+  }
+
+  @keyframes authSpin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+
+  .auth-status-text h3 {
+    font-size: 1.15rem;
+    color: #ffffff;
+    font-weight: 700;
+    margin-bottom: 0.35rem;
+  }
+
+  .auth-status-text p {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin: 0;
+  }
   /* --- LAYOUT GRID --- */
   .dashboard-container {
     display: flex;
@@ -884,6 +1302,8 @@
     background-color: var(--color-success-bg);
     color: var(--color-success);
   }
+
+
 
   .collapse-btn {
     display: flex;
