@@ -20,18 +20,24 @@
 		try {
 			const clerk = await initClerk();
 			if (clerk.user && !authState.isAuthenticated) {
-				await verifyWithBackend();
+				const ok = await verifyWithBackend();
+				if (ok && window.location.pathname === '/') {
+					window.location.href = '/dashboard';
+				}
 			}
 
-			clerk.addListener((event: any) => {
+			clerk.addListener(async (event: any) => {
 				if (event.user && !authState.isAuthenticated) {
-					verifyWithBackend();
+					const ok = await verifyWithBackend();
+					if (ok && window.location.pathname === '/') {
+						window.location.href = '/dashboard';
+					}
 				} else if (!event.user && authState.isAuthenticated) {
 					logout();
 				}
 			});
 		} catch (error) {
-			console.error('Clerk root initialization failed:', error);
+			console.warn('Clerk root initialization skipped or blocked by client:', error);
 		}
 	});
 </script>

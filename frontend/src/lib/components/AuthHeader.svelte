@@ -17,7 +17,6 @@
   onMount(async () => {
     try {
       const clerk = await initClerk();
-      clerkReady = true;
 
       // If user is already signed in via Clerk, verify with backend
       if (clerk.user) {
@@ -25,17 +24,22 @@
       }
 
       // Listen for Clerk auth state changes
-      clerk.addListener((event: any) => {
+      clerk.addListener(async (event: any) => {
         if (event.user && !authState.isAuthenticated) {
-          // User signed in via Clerk modal
-          verifyWithBackend();
+          // User signed in via Clerk modal or redirect
+          const ok = await verifyWithBackend();
+          if (ok && window.location.pathname === '/') {
+            window.location.href = '/dashboard';
+          }
         } else if (!event.user && authState.isAuthenticated) {
           // User signed out
           logout();
         }
       });
     } catch (error) {
-      console.error('Clerk initialization failed:', error);
+      console.warn('Clerk initialization failed:', error);
+    } finally {
+      clerkReady = true;
     }
   });
 

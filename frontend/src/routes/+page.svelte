@@ -37,8 +37,8 @@
         <a href="/" class="active">Overview</a>
         {#if authState.isAuthenticated}
           <a href="/dashboard">Launch App</a>
-          <AuthHeader />
         {/if}
+        <AuthHeader />
       </nav>
     </header>
 

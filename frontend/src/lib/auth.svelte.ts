@@ -77,16 +77,35 @@ export async function verifyWithBackend(): Promise<boolean> {
       return false;
     }
 
-    // Send Clerk token to backend for verification
-    const response = await fetch(`${API_BASE}/api/auth/clerk-verify`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",  // ← Important: sends/receives cookies
-      body: JSON.stringify({ token: clerkToken }),
-    });
+    // Send Clerk token to backend for verification with retry for Render cold starts
+    let response: Response | null = null;
+    let attempts = 3;
 
-    if (!response.ok) {
-      console.error("Backend auth verification failed:", response.status);
+    while (attempts > 0) {
+      try {
+        response = await fetch(`${API_BASE}/api/auth/clerk-verify`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",  // ← Important: sends/receives cookies
+          body: JSON.stringify({ token: clerkToken }),
+        });
+
+        // If backend responds (even with 4xx), don't retry unless it's a 502/503/504 cold-boot gateway error
+        if (response.ok || (response.status < 500 && response.status !== 408)) {
+          break;
+        }
+      } catch (networkErr) {
+        if (attempts === 1) throw networkErr;
+      }
+
+      attempts--;
+      if (attempts > 0) {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+      }
+    }
+
+    if (!response || !response.ok) {
+      console.error("Backend auth verification failed:", response?.status);
       clearAuthState();
       return false;
     }
@@ -111,6 +130,7 @@ export async function verifyWithBackend(): Promise<boolean> {
     isLoading = false;
   }
 }
+
 
 
 // ╭──────────────────────────────────────────────╮
