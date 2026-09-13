@@ -226,23 +226,24 @@
     color: #f8fafc;
   }
 
-  /* Hero Section (Centered Glass Card) */
+  /* Hero Section (Left-aligned, Vertically Centered Glass Card) */
   .hero-section {
     display: flex;
-    justify-content: center;
+    justify-content: flex-start;
     align-items: center;
     height: 100%;
+    padding-left: 0.5rem;
   }
 
   .hero-card {
-    max-width: 680px;
-    padding: 3rem 2.5rem;
-    text-align: center;
+    max-width: 470px;
+    padding: 2.25rem 2rem;
+    text-align: left;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    gap: 1.5rem;
-    border-radius: 24px;
+    align-items: flex-start;
+    gap: 1.2rem;
+    border-radius: 20px;
     box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
   }
 
@@ -254,7 +255,7 @@
     border: 1px solid rgba(89, 255, 0, 0.25);
     padding: 4px 12px;
     border-radius: 99px;
-    font-size: 0.8rem;
+    font-size: 0.78rem;
     font-weight: 500;
     color: var(--color-accent);
   }
@@ -264,19 +265,19 @@
   }
 
   .hero-card h1 {
-    font-size: 2.5rem;
-    line-height: 1.15;
+    font-size: 2rem;
+    line-height: 1.18;
     font-weight: 800;
   }
 
   .hero-desc {
     color: var(--text-secondary);
-    font-size: 0.95rem;
-    line-height: 1.6;
+    font-size: 0.88rem;
+    line-height: 1.55;
   }
 
   .cta-group {
-    margin-top: 0.5rem;
+    margin-top: 0.25rem;
     display: flex;
     justify-content: flex-start;
     width: 100%;
