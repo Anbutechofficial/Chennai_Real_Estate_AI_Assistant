@@ -11,11 +11,13 @@ Features:
   5. Profile retrieval & updating.
 """
 
+import httpx
 from datetime import datetime, timezone
 from typing import Optional, List
 from fastapi import APIRouter, HTTPException, Request, Response, Depends, status
 from pydantic import BaseModel
 
+from app.core.config import Setting
 from app.core.security import (
     verify_clerk_token,
     create_access_token,
@@ -44,9 +46,13 @@ class ClerkVerifyRequest(BaseModel):
 class AuthResponse(BaseModel):
     """Response after successful authentication."""
     access_token: str
+    refresh_token: Optional[str] = None
     token_type: str = "bearer"
     user_id: str
     email: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    avatar_url: Optional[str] = None
     is_verified: bool = True
     is_banned: bool = False
     role: str = "user"
@@ -55,6 +61,7 @@ class AuthResponse(BaseModel):
 class RefreshResponse(BaseModel):
     """Response after successful token refresh."""
     access_token: str
+    refresh_token: Optional[str] = None
     token_type: str = "bearer"
 
 
@@ -96,6 +103,31 @@ async def clerk_verify(body: ClerkVerifyRequest, response: Response):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Clerk token missing user ID (sub)",
         )
+
+    # Step 2b — Enrich from Clerk REST API if email or name missing from default session JWT
+    if (not email or not first_name or not avatar_url) and Setting.CLERK_SECRET_KEY:
+        try:
+            async with httpx.AsyncClient(timeout=8) as client:
+                clerk_res = await client.get(
+                    f"https://api.clerk.com/v1/users/{user_id}",
+                    headers={"Authorization": f"Bearer {Setting.CLERK_SECRET_KEY}"}
+                )
+                if clerk_res.status_code == 200:
+                    clerk_user = clerk_res.json()
+                    if not email and clerk_user.get("email_addresses"):
+                        for email_obj in clerk_user["email_addresses"]:
+                            addr = email_obj.get("email_address", "")
+                            if addr:
+                                email = addr
+                                break
+                    if not first_name:
+                        first_name = clerk_user.get("first_name", "") or ""
+                    if not last_name:
+                        last_name = clerk_user.get("last_name", "") or ""
+                    if not avatar_url:
+                        avatar_url = clerk_user.get("image_url", "") or ""
+        except Exception as e:
+            print(f"[Auth] Clerk API user enrichment note: {e}")
 
     users_col = get_users_collection()
     profiles_col = get_profiles_collection()
@@ -161,8 +193,12 @@ async def clerk_verify(body: ClerkVerifyRequest, response: Response):
 
     return AuthResponse(
         access_token=access_token,
+        refresh_token=refresh_token,
         user_id=user_id,
         email=email,
+        first_name=first_name,
+        last_name=last_name,
+        avatar_url=avatar_url,
         is_verified=is_verified,
         is_banned=False,
         role=existing_user.get("role", "user") if existing_user else "user"
@@ -179,8 +215,8 @@ async def refresh_access_token(request: Request, response: Response):
     Issue a new access token and rotate the refresh token by validating the
     hashed refresh token in the `users` collection.
     """
-    # 1. Read refresh token from HTTP-only cookie
-    refresh_token = request.cookies.get("refresh_token")
+    # 1. Read refresh token from HTTP-only cookie or x-refresh-token header
+    refresh_token = request.cookies.get("refresh_token") or request.headers.get("x-refresh-token")
 
     if not refresh_token:
         raise HTTPException(
@@ -245,7 +281,7 @@ async def refresh_access_token(request: Request, response: Response):
     # 8. Set new cookie
     set_refresh_cookie(response, new_refresh_token)
 
-    return RefreshResponse(access_token=new_access_token)
+    return RefreshResponse(access_token=new_access_token, refresh_token=new_refresh_token)
 
 
 # ╭──────────────────────────────────────────────╮
@@ -257,7 +293,7 @@ async def logout(request: Request, response: Response):
     """
     Invalidate the stored hashed refresh token in MongoDB and clear the cookie.
     """
-    refresh_token = request.cookies.get("refresh_token")
+    refresh_token = request.cookies.get("refresh_token") or request.headers.get("x-refresh-token")
     if refresh_token:
         try:
             payload = verify_refresh_token(refresh_token)

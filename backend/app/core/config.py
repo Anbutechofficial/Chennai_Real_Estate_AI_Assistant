@@ -39,7 +39,7 @@ class Setting:
     # ── Clerk Auth ──
     CLERK_PUBLISHABLE_KEY: str = os.getenv("CLERK_PUBLISHABLE_KEY", "")
     CLERK_SECRET_KEY: str = os.getenv("CLERK_SECRET_KEY", "").strip()
-    CLERK_ISSUER: str = os.getenv("CLERK_ISSUER", "")
+    CLERK_ISSUER: str = (os.getenv("CLERK_ISSUER", "").strip() or "https://coherent-eel-9638.clerk.accounts.dev")
 
     # ── Google OAuth 2.0 (MCP & Calendar Integration) ──
     GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")

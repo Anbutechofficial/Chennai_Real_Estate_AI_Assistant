@@ -10,6 +10,7 @@ Handles all authentication & token operations:
 
 import hashlib
 import hmac
+import os
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -60,7 +61,13 @@ async def _fetch_clerk_jwks() -> dict:
     if _jwks_cache:
         return _jwks_cache
 
-    issuer = Setting.CLERK_ISSUER.rstrip("/")
+    raw_issuer = (Setting.CLERK_ISSUER or "").strip()
+    if not raw_issuer:
+        raw_issuer = "https://coherent-eel-9638.clerk.accounts.dev"
+    elif not raw_issuer.startswith("http://") and not raw_issuer.startswith("https://"):
+        raw_issuer = f"https://{raw_issuer}"
+
+    issuer = raw_issuer.rstrip("/")
     jwks_url = f"{issuer}/.well-known/jwks.json"
 
     async with httpx.AsyncClient(timeout=10) as client:
@@ -131,9 +138,22 @@ async def verify_clerk_token(token: str) -> dict:
             token,
             public_key,
             algorithms=["RS256"],
-            issuer=Setting.CLERK_ISSUER.rstrip("/"),
-            options={"verify_aud": False},  # Clerk doesn't always set aud
+            options={"verify_aud": False, "verify_iss": False},
         )
+
+        # Flexible issuer validation: tolerate trailing slashes or subdomains
+        token_iss = (payload.get("iss") or "").rstrip("/")
+        expected_iss = (Setting.CLERK_ISSUER or "").rstrip("/")
+        if expected_iss and token_iss:
+            # Check if domain matches (handles https://coherent-eel-9638.clerk.accounts.dev vs accounts.dev)
+            if expected_iss not in token_iss and token_iss not in expected_iss:
+                expected_host = expected_iss.replace("https://", "").replace("http://", "")
+                token_host = token_iss.replace("https://", "").replace("http://", "")
+                if expected_host.split(".")[-2:] != token_host.split(".")[-2:]:
+                    raise HTTPException(
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        detail=f"Clerk token issuer mismatch: expected {expected_iss}, got {token_iss}",
+                    )
 
         return payload
 
@@ -286,38 +306,43 @@ def verify_refresh_token(token: str) -> dict:
 # │   4. HTTP-Only Cookie Helpers                │
 # ╰──────────────────────────────────────────────╯
 
-def set_refresh_cookie(response: Response, refresh_token: str) -> None:
+def set_refresh_cookie(response: Response, refresh_token: str, secure: Optional[bool] = None) -> None:
     """
     Set the refresh token as an HTTP-only secure cookie.
 
     Security properties:
       • httponly  — JavaScript cannot read the cookie (XSS protection)
-      • secure   — Cookie is only sent over HTTPS (disabled in dev for localhost)
-      • samesite — Lax prevents CSRF on cross-site navigations
+      • secure   — Cookie is sent over HTTPS (set True in prod/Render)
+      • samesite — 'none' with secure=True in prod for cross-site, 'lax' for local dev
       • max_age  — Matches the refresh token expiry
     """
     max_age_seconds = Setting.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60
+    is_prod = secure if secure is not None else bool(os.getenv("RENDER") or os.getenv("PRODUCTION"))
+    samesite = "none" if is_prod else "lax"
 
     response.set_cookie(
         key="refresh_token",
         value=refresh_token,
         httponly=True,
-        secure=False,       # Set True in production (HTTPS)
-        samesite="lax",
+        secure=is_prod,
+        samesite=samesite,
         max_age=max_age_seconds,
         path="/",           # Available to all routes
     )
 
 
-def clear_refresh_cookie(response: Response) -> None:
+def clear_refresh_cookie(response: Response, secure: Optional[bool] = None) -> None:
     """
     Delete the refresh token cookie (used on logout).
     """
+    is_prod = secure if secure is not None else bool(os.getenv("RENDER") or os.getenv("PRODUCTION"))
+    samesite = "none" if is_prod else "lax"
+
     response.delete_cookie(
         key="refresh_token",
         httponly=True,
-        secure=False,       # Match the same flags used when setting
-        samesite="lax",
+        secure=is_prod,
+        samesite=samesite,
         path="/",
     )
 

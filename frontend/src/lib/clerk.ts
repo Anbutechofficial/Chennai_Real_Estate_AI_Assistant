@@ -1,4 +1,5 @@
 import { Clerk } from "@clerk/clerk-js";
+import { goto } from "$app/navigation";
 import { verifyWithBackend } from "./auth.svelte";
 
 // ── Singleton Clerk Instance ──
@@ -87,15 +88,17 @@ export async function signIn(): Promise<void> {
     // If user is already signed in to Clerk, bypass modal and verify / enter dashboard
     if (clerk.user || clerk.session) {
       await verifyWithBackend().catch(() => {});
-      window.location.href = "/dashboard";
+      if (window.location.pathname !== "/dashboard") {
+        await goto("/dashboard");
+      }
       return;
     }
 
-    // Attempt modal sign-in
+    // Attempt modal sign-in using Clerk JS v5 properties
     try {
       clerk.openSignIn({
-        afterSignInUrl: "/dashboard",
-        afterSignUpUrl: "/dashboard",
+        fallbackRedirectUrl: "/dashboard",
+        signUpFallbackRedirectUrl: "/dashboard",
       });
       return;
     } catch (modalErr: any) {
@@ -107,13 +110,15 @@ export async function signIn(): Promise<void> {
         modalErr?.code === "cannot_render_single_session_enabled"
       ) {
         await verifyWithBackend().catch(() => {});
-        window.location.href = "/dashboard";
+        if (window.location.pathname !== "/dashboard") {
+          await goto("/dashboard");
+        }
         return;
       }
 
-      // Try Clerk's redirectToSignIn helper
+      // Try Clerk's redirectToSignIn helper with v5 redirectUrl
       try {
-        await clerk.redirectToSignIn({ returnBackUrl: returnTarget });
+        await clerk.redirectToSignIn({ redirectUrl: returnTarget });
         return;
       } catch (redirectErr) {
         console.warn("clerk.redirectToSignIn also failed:", redirectErr);
@@ -142,15 +147,17 @@ export async function signUp(): Promise<void> {
     // If user is already signed in to Clerk, bypass modal and go to dashboard
     if (clerk.user || clerk.session) {
       await verifyWithBackend().catch(() => {});
-      window.location.href = "/dashboard";
+      if (window.location.pathname !== "/dashboard") {
+        await goto("/dashboard");
+      }
       return;
     }
 
-    // Attempt modal sign-up
+    // Attempt modal sign-up using Clerk JS v5 properties
     try {
       clerk.openSignUp({
-        afterSignInUrl: "/dashboard",
-        afterSignUpUrl: "/dashboard",
+        fallbackRedirectUrl: "/dashboard",
+        signInFallbackRedirectUrl: "/dashboard",
       });
       return;
     } catch (modalErr: any) {
@@ -161,13 +168,15 @@ export async function signUp(): Promise<void> {
         modalErr?.code === "cannot_render_single_session_enabled"
       ) {
         await verifyWithBackend().catch(() => {});
-        window.location.href = "/dashboard";
+        if (window.location.pathname !== "/dashboard") {
+          await goto("/dashboard");
+        }
         return;
       }
 
-      // Try Clerk's redirectToSignUp helper
+      // Try Clerk's redirectToSignUp helper with v5 redirectUrl
       try {
-        await clerk.redirectToSignUp({ returnBackUrl: returnTarget });
+        await clerk.redirectToSignUp({ redirectUrl: returnTarget });
         return;
       } catch (redirectErr) {
         console.warn("clerk.redirectToSignUp also failed:", redirectErr);
@@ -192,4 +201,3 @@ export async function signOut(): Promise<void> {
     console.warn("Clerk sign-out failed:", error);
   }
 }
-

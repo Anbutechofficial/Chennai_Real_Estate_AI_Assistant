@@ -2,6 +2,7 @@
 	import '../app.css';
 	import favicon from '$lib/assets/favicon.svg';
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { initClerk } from '$lib/clerk';
 	import { authState, verifyWithBackend, logout } from '$lib/auth.svelte';
 
@@ -19,25 +20,26 @@
 		// Initialize Clerk and listen for auth state updates
 		try {
 			const clerk = await initClerk();
-			if (clerk.user && !authState.isAuthenticated) {
-				const ok = await verifyWithBackend();
-				if (ok && window.location.pathname === '/') {
-					window.location.href = '/dashboard';
+			if (clerk.user) {
+				// Kick off backend verification in background
+				verifyWithBackend().catch(() => {});
+				if (window.location.pathname === '/') {
+					goto('/dashboard');
 				}
 			}
 
 			clerk.addListener(async (event: any) => {
-				if (event.user && !authState.isAuthenticated) {
-					const ok = await verifyWithBackend();
-					if (ok && window.location.pathname === '/') {
-						window.location.href = '/dashboard';
+				if (event.user) {
+					verifyWithBackend().catch(() => {});
+					if (window.location.pathname === '/') {
+						goto('/dashboard');
 					}
 				} else if (!event.user && authState.isAuthenticated) {
 					logout();
 				}
 			});
 		} catch (error) {
-			console.warn('Clerk root initialization skipped or blocked by client:', error);
+			console.warn('Clerk root initialization note:', error);
 		}
 	});
 </script>

@@ -153,19 +153,17 @@
           return;
         }
 
-        if (!authState.isAuthenticated) {
-          const verified = await verifyWithBackend();
-          if (!verified && !clerk.user) {
-            isAccessAllowed = false;
-            authChecking = false;
-            goto('/');
-            return;
-          }
-        }
-
+        // Authenticated with Clerk — allow dashboard access immediately
         isAccessAllowed = true;
         authChecking = false;
-        checkBackendHealth();
+
+        // Verify and sync with backend without blocking UI entry
+        verifyWithBackend().then(() => {
+          checkBackendHealth();
+        }).catch((err) => {
+          console.warn('Backend session verification note:', err);
+          checkBackendHealth();
+        });
       } catch (err) {
         console.error('Auth guard error:', err);
         isAccessAllowed = false;

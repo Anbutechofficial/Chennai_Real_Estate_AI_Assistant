@@ -156,7 +156,7 @@
     color: #f8fafc;
   }
 
-  .logo-icon {
+  :global(.logo-icon) {
     color: var(--color-accent);
     filter: drop-shadow(0 0 8px var(--color-accent-glow));
   }
@@ -189,7 +189,7 @@
     z-index: 10;
   }
 
-  .accent-icon {
+  :global(.accent-icon) {
     color: #59FF00;
   }
 
@@ -218,40 +218,38 @@
     text-decoration: none;
     color: #94a3b8;
     font-weight: 500;
-    font-size: 0.95rem;
+    font-size: 0.9rem;
     transition: color var(--transition-fast);
   }
 
   .nav-links a:hover, .nav-links a.active {
-    color: var(--color-accent);
+    color: #f8fafc;
   }
 
-  /* Hero Section (Left Aligned for 3D Villa Visibility) */
+  /* Hero Section (Centered Glass Card) */
   .hero-section {
-    max-width: 540px;
-    margin-top: auto;
-    margin-bottom: auto;
-    margin-left: 2rem;
     display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    text-align: left;
-    gap: 1.5rem;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
   }
 
   .hero-card {
-    padding: 2.5rem;
+    max-width: 680px;
+    padding: 3rem 2.5rem;
+    text-align: center;
     display: flex;
     flex-direction: column;
-    align-items: flex-start;
-    gap: 1.25rem;
+    align-items: center;
+    gap: 1.5rem;
+    border-radius: 24px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
   }
 
   .badge {
-    align-self: flex-start;
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     background: rgba(89, 255, 0, 0.1);
     border: 1px solid rgba(89, 255, 0, 0.25);
     padding: 4px 12px;
@@ -261,7 +259,7 @@
     color: var(--color-accent);
   }
 
-  .glow-icon {
+  :global(.glow-icon) {
     animation: pulseGlow 2s infinite ease-in-out;
   }
 

@@ -7,8 +7,8 @@
 -->
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { initClerk, signIn, signUp, signOut as clerkSignOut } from '$lib/clerk';
-  import { authState, verifyWithBackend, logout } from '$lib/auth.svelte';
+  import { initClerk, signIn, signUp } from '$lib/clerk';
+  import { authState, logout } from '$lib/auth.svelte';
   import { LogIn, LogOut, UserCircle, Loader } from '@lucide/svelte';
 
   let clerkReady = $state(false);
@@ -16,28 +16,9 @@
 
   onMount(async () => {
     try {
-      const clerk = await initClerk();
-
-      // If user is already signed in via Clerk, verify with backend
-      if (clerk.user) {
-        await verifyWithBackend();
-      }
-
-      // Listen for Clerk auth state changes
-      clerk.addListener(async (event: any) => {
-        if (event.user && !authState.isAuthenticated) {
-          // User signed in via Clerk modal or redirect
-          const ok = await verifyWithBackend();
-          if (ok && window.location.pathname === '/') {
-            window.location.href = '/dashboard';
-          }
-        } else if (!event.user && authState.isAuthenticated) {
-          // User signed out
-          logout();
-        }
-      });
+      await initClerk();
     } catch (error) {
-      console.warn('Clerk initialization failed:', error);
+      console.warn('AuthHeader Clerk initialization note:', error);
     } finally {
       clerkReady = true;
     }
@@ -67,12 +48,21 @@
       showUserMenu = false;
     }
   }
+
+  function getUserDisplayName(): string {
+    const u = authState.currentUser;
+    if (!u) return 'User';
+    if (u.first_name) {
+      return `${u.first_name} ${u.last_name || ''}`.trim();
+    }
+    return u.email || 'User';
+  }
 </script>
 
 <svelte:window onclick={handleClickOutside} />
 
 <div class="auth-header" id="auth-header">
-  {#if authState.isLoading || !clerkReady}
+  {#if !clerkReady}
     <!-- Loading state -->
     <div class="auth-loading">
       <Loader size={18} class="spin-icon" />
@@ -87,18 +77,37 @@
         aria-label="User menu"
         id="user-menu-toggle"
       >
-        <UserCircle size={22} />
+        {#if authState.currentUser.avatar_url}
+          <img
+            src={authState.currentUser.avatar_url}
+            alt="User avatar"
+            class="header-user-img"
+          />
+        {:else}
+          <UserCircle size={22} />
+        {/if}
         <span class="user-email">
-          {authState.currentUser.email || 'User'}
+          {getUserDisplayName()}
         </span>
       </button>
 
       {#if showUserMenu}
         <div class="user-dropdown glass-panel animate-fade-in" id="user-dropdown">
           <div class="dropdown-header">
-            <UserCircle size={20} />
+            {#if authState.currentUser.avatar_url}
+              <img
+                src={authState.currentUser.avatar_url}
+                alt="User avatar"
+                class="dropdown-user-img"
+              />
+            {:else}
+              <UserCircle size={20} />
+            {/if}
             <div class="dropdown-user-info">
-              <span class="dropdown-email">{authState.currentUser.email || 'User'}</span>
+              <span class="dropdown-name">{getUserDisplayName()}</span>
+              {#if authState.currentUser.email}
+                <span class="dropdown-email">{authState.currentUser.email}</span>
+              {/if}
               <span class="dropdown-id">ID: {authState.currentUser.user_id.slice(0, 12)}...</span>
             </div>
           </div>
@@ -280,10 +289,33 @@
     overflow: hidden;
   }
 
-  .dropdown-email {
-    font-size: 0.82rem;
+  .header-user-img {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+
+  .dropdown-user-img {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+
+  .dropdown-name {
+    font-size: 0.88rem;
     font-weight: 600;
     color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .dropdown-email {
+    font-size: 0.76rem;
+    font-weight: 400;
+    color: var(--text-secondary);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
