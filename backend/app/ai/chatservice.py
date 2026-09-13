@@ -92,7 +92,8 @@ async def generate_with_gemini(
                     conversation_context.append(f"{role.capitalize()}: {content.strip()}")
 
         context_str = "\n".join(conversation_context) if conversation_context else ""
-        user_content = f"{'CONVERSATION HISTORY:\n' + context_str + chr(10) + chr(10) if context_str else ''}CURRENT USER QUERY / CONTEXT:\n{prompt}"
+        history_header = f"CONVERSATION HISTORY:\n{context_str}\n\n" if context_str else ""
+        user_content = f"{history_header}CURRENT USER QUERY / CONTEXT:\n{prompt}"
 
         config = types.GenerateContentConfig(
             system_instruction=system_prompt,
