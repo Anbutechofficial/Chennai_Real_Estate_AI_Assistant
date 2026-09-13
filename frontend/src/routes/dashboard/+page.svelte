@@ -202,7 +202,7 @@
   }
 
   const RENDER_BACKEND_URL = 'https://real-estate-rag-backend.onrender.com';
-  const LOCAL_BACKEND_URL = (import.meta.env.VITE_API_BASE_URL as string) || 'http://localhost:8000';
+  const LOCAL_BACKEND_URL = (import.meta.env.VITE_API_BASE_URL as string) || 'http://localhost:8010';
 
   let activeWorkingUrl: string | null = null;
   let API_BASE_URL = RENDER_BACKEND_URL;
@@ -217,13 +217,13 @@
   async function fetchWithFallback(path: string, init?: RequestInit): Promise<Response> {
     const isLocal = isLocalEnvironment();
 
-    // On Render/Production: NEVER query localhost:8000
+    // On Render/Production: NEVER query localhost:8010
     // On Localhost: query local backend first, with Render fallback
     const targets = isLocal
       ? [
           LOCAL_BACKEND_URL,
-          'http://localhost:8000',
-          'http://127.0.0.1:8000',
+          'http://localhost:8010',
+          'http://127.0.0.1:8010',
           activeWorkingUrl,
           RENDER_BACKEND_URL
         ]

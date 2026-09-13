@@ -145,7 +145,7 @@ async def get_google_oauth_url(redirect_uri: Optional[str] = None):
     Generates a real Google OAuth 2.0 authorization URL with calendar and profile scopes.
     """
     client_id = Setting.GOOGLE_CLIENT_ID or "847291039482-rf-ai-assistant.apps.googleusercontent.com"
-    target_redirect = redirect_uri or Setting.GOOGLE_REDIRECT_URI or "http://localhost:8000/api/auth/google/callback"
+    target_redirect = redirect_uri or Setting.GOOGLE_REDIRECT_URI or "http://localhost:8010/api/auth/google/callback"
     
     scopes = [
         "https://www.googleapis.com/auth/calendar.events",
