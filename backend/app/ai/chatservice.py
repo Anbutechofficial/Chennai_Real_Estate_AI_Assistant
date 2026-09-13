@@ -99,7 +99,7 @@ async def generate_with_gemini(
             temperature=0.2
         )
 
-        for model_choice in ["gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-3.7-flash", "gemini-3.6-flash"]:
+        for model_choice in ["gemini-flash-latest", "gemini-2.5-flash", "gemini-flash-lite-latest", "gemini-2.5-flash-lite", "gemini-2.5-pro", "gemini-3.6-flash"]:
             try:
                 res = await asyncio.to_thread(
                     client.models.generate_content,
@@ -684,6 +684,8 @@ async def ask_agent(
                 print(f"[OpenRouter Agent {or_model}] note: {e}")
 
     fallback_res = await ask_llm(enriched_prompt, history=history)
+    if fallback_res.startswith("Hello! I am your Real Estate AI Assistant") and mcp_data:
+        return mcp_data
     return await _intercept_and_execute_raw_tool_calls(fallback_res, user_query=user_query)
 
 
@@ -783,5 +785,22 @@ async def ask_llm(prompt: str, history: Optional[List[Dict[str, Any]]] = None) -
                 return res.choices[0].message.content.strip()
         except Exception:
             pass
+
+    # Tier 6: Direct Intelligent Fallback from Retrieved RAG Context
+    # If LLMs are down, rate-limited, or unconfigured on remote host,
+    # NEVER discard retrieved property listings! Return the formatted properties directly.
+    if "<property_context>" in prompt:
+        m = re.search(r'<property_context>(.*?)</property_context>', prompt, re.DOTALL)
+        if m:
+            ctx_text = m.group(1).strip()
+            if ctx_text:
+                return ctx_text
+
+    if "No properties matching the user's requested criteria exist in our database" in prompt or "exact_match_found: False" in prompt:
+        return "No properties found matching your requested criteria in our database. Please try searching with a different location, BHK, price range, or area preference."
+
+    q_lower = prompt.lower().strip()
+    if any(q_lower == g or q_lower.startswith(g + " ") for g in ["hi", "hello", "hey", "vanakkam", "namaste", "good morning", "good evening"]):
+        return "Hello! I am your Real Estate AI Assistant. How can I help you find your dream property today?"
 
     return "Hello! I am your Real Estate AI Assistant. How can I help you find your dream property today?"

@@ -221,10 +221,10 @@
     // On Localhost: query local backend first, with Render fallback
     const targets = isLocal
       ? [
-          activeWorkingUrl,
           LOCAL_BACKEND_URL,
           'http://localhost:8000',
           'http://127.0.0.1:8000',
+          activeWorkingUrl,
           RENDER_BACKEND_URL
         ]
       : [
@@ -252,7 +252,7 @@
 
         const res = await fetch(url, requestInit);
         clearTimeout(timeoutId);
-        if (res) {
+        if (res && res.ok) {
           activeWorkingUrl = cleanBase;
           API_BASE_URL = cleanBase;
           return res;

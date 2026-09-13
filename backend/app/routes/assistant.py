@@ -131,7 +131,7 @@ async def transcribe_audio(file: UploadFile = File(...)):
             )
 
             def _call_gemini():
-                for m in ["gemini-3.6-flash", "gemini-3.5-flash-lite"]:
+                for m in ["gemini-flash-latest", "gemini-2.5-flash", "gemini-flash-lite-latest", "gemini-2.5-flash-lite"]:
                     try:
                         return client.models.generate_content(
                             model=m,
