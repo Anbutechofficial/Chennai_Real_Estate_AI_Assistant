@@ -2016,10 +2016,6 @@
     animation: scaleUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
-  .animate-spin {
-    animation: spin 1s linear infinite;
-  }
-
   @keyframes fadeIn {
     from { opacity: 0; }
     to { opacity: 1; }

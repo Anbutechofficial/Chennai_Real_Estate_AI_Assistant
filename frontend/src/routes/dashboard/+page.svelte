@@ -2082,96 +2082,7 @@
     color: var(--text-primary);
   }
 
-  .price-tag {
-    font-family: var(--font-display);
-    font-weight: 700;
-    font-size: 0.9rem;
-    color: var(--color-accent);
-  }
 
-  .listing-desc {
-    font-size: 0.82rem;
-    color: var(--text-secondary);
-    line-height: 1.4;
-  }
-
-  .listing-badges {
-    display: flex;
-    gap: 8px;
-    margin-top: auto;
-  }
-
-  .listing-badges span {
-    font-size: 0.75rem;
-    background-color: rgba(255, 255, 255, 0.04);
-    color: var(--text-muted);
-    border: 1px solid var(--border-light);
-    padding: 2px 6px;
-    border-radius: 4px;
-  }
-
-  .light-theme .listing-badges span {
-    background-color: #f1f5f9;
-  }
-
-  .vector-store-stats {
-    padding: 1.5rem;
-  }
-
-  .vector-store-stats h5 {
-    font-size: 0.95rem;
-    margin-bottom: 0.75rem;
-  }
-
-  .vector-store-stats ul {
-    list-style: none;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    font-size: 0.88rem;
-  }
-
-  .vector-store-stats li strong {
-    color: var(--text-primary);
-  }
-
-  /* --- HELP SECTION --- */
-  .faq-section {
-    display: flex;
-    flex-direction: column;
-    gap: 1.5rem;
-  }
-
-  .faq-item h5 {
-    font-size: 0.95rem;
-    color: var(--text-primary);
-    margin-bottom: 6px;
-  }
-
-  .faq-item p {
-    font-size: 0.88rem;
-    color: var(--text-secondary);
-    line-height: 1.5;
-  }
-
-  .code-block {
-    background-color: rgba(0, 0, 0, 0.25);
-    border: 1px solid var(--border-light);
-    padding: 12px;
-    border-radius: 8px;
-    overflow-x: auto;
-    margin-top: 6px;
-  }
-
-  .light-theme .code-block {
-    background-color: #f8fafc;
-  }
-
-  .code-block code {
-    font-family: monospace;
-    font-size: 0.82rem;
-    color: var(--color-accent);
-  }
 
   /* --- UTILITY SPINNER --- */
   .spinner {
@@ -2188,20 +2099,7 @@
     100% { transform: rotate(360deg); }
   }
 
-  .tool-btn.voice-btn.recording {
-    background-color: rgba(239, 68, 68, 0.15);
-    border-color: #ef4444;
-    animation: micPulse 1.5s infinite ease-in-out;
-  }
-  
-  @keyframes micPulse {
-    0%, 100% {
-      box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
-    }
-    50% {
-      box-shadow: 0 0 0 8px rgba(239, 68, 68, 0);
-    }
-  }
+
 
   .mini-spinner {
     width: 14px;
@@ -2400,10 +2298,6 @@
       font-size: 1rem;
     }
 
-    .username {
-      display: none;
-    }
-
     .workspace-content {
       padding: 0.75rem;
       overflow-y: auto;
@@ -2418,12 +2312,6 @@
       font-size: 0.86rem;
       overflow-wrap: anywhere;
       word-break: break-word;
-    }
-
-    .svg-wrapper {
-      overflow-x: auto;
-      -webkit-overflow-scrolling: touch;
-      padding-bottom: 4px;
     }
 
     .quick-ask-body {
